@@ -1,10 +1,7 @@
 import discord
 from discord.ext import commands
-from discord.ui import View, Select
+from discord import app_commands
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
 
 TOKEN = os.getenv("TOKEN")  # Eğer environment variable kullanıyorsanız
 # Eğer doğrudan token yazıyorsanız:
@@ -16,105 +13,96 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Kanal ID'leri
-KATEGORI_ID = 1474830960393453619  # Klan kategorisi ID
-PARTNER_BASVURU_KANAL_ID = 1476538995231162418  # Partner başvuru kanal ID'si
+ISTEK_KANAL_ID = 1476496120258629709  # Başvuru Kanalı
+PARTNER_KANAL_ID = 1476579700775190859  # Partner Başvuru Kanalı
+PARTNER_BASVURU_KANAL_ID = 1476579800419143781  # Partner Bekleme Kanalı
+ONAY_KANAL_ID = 1476579074301366292  # Başvuru Onay Kanalı
+EKIP_ALIM_KANAL_ID = 1476579896305254551  # Ekip Alım Kanalı
 
-# Yetkili rollerin ID'leri
-YETKILI_ROL = 1384294618195169311  # Yetkili rolü ID
+# Yetkili rollerin ID'lerini belirliyoruz
+YETKILI_ROLLER = [
+    1476496118157283431,  # Yetkili 1
+    1476496118119399575,  # Yetkili 2
+    1476496118119399572,  # Yetkili 3
+    1476496118119399569   # Yetkili 4
+]
 
-# =============================================
+# ✅ Ekip Alım Modal
+class EkipAlimModal(discord.ui.Modal, title="Ekip Alım Başvuru Formu"):
+    isim = discord.ui.TextInput(label="İsim")
+    aciklama = discord.ui.TextInput(label="Açıklama", style=discord.TextStyle.paragraph)
+    deneyim = discord.ui.TextInput(label="Deneyiminiz", placeholder="Ne kadar deneyiminiz var?")
 
-# Partner Başvuru Modal
-class PartnerBasvuruModal(discord.ui.Modal, title="Klan Başvuru Formu"):
-    klan_isim = discord.ui.TextInput(label="Klan İsmi")
-    aciklama = discord.ui.TextInput(label="Klan Açıklaması", style=discord.TextStyle.paragraph)
-    deneyim = discord.ui.TextInput(label="Minecraft Deneyimi (Yıl)", placeholder="Örneğin: 2 yıl")
-    
     async def on_submit(self, interaction: discord.Interaction):
-        try:
-            deneyim = int(self.deneyim.value)
-        except ValueError:
-            await interaction.response.send_message("Geçerli bir yıl bilgisi girin!", ephemeral=True)
-            return
-        
-        # Başvuru embed olarak gönderilecek
-        embed = discord.Embed(title="🛡️ Klan Başvurusu", color=0x2ecc71)
-        embed.add_field(name="Klan İsmi", value=self.klan_isim.value, inline=False)
+        embed = discord.Embed(title="🎮 Ekip Alım Başvurusu", color=0x2ecc71)
+        embed.add_field(name="İsim", value=self.isim.value, inline=False)
         embed.add_field(name="Açıklama", value=self.aciklama.value, inline=False)
-        embed.add_field(name="Minecraft Deneyimi", value=str(deneyim), inline=False)
-
-        # Başvuruyu partner başvuru kanalına gönder
-        channel = bot.get_channel(PARTNER_BASVURU_KANAL_ID)
+        embed.add_field(name="Deneyim", value=self.deneyim.value, inline=False)
+        # Başvuruyu Ekip Alım Kanalına gönder
+        channel = bot.get_channel(EKIP_ALIM_KANAL_ID)
         if channel:
             await channel.send(embed=embed)
+        await interaction.response.send_message("Başvurunuz alındı ve ekip alım kanalına gönderildi.", ephemeral=True)
 
-        await interaction.response.send_message("Başvurunuz alındı ve onay için yetkililere iletildi.", ephemeral=True)
+# ✅ Yetkili Alım Modal
+class YetkiliAlimModal(discord.ui.Modal, title="Yetkili Alım Başvuru Formu"):
+    isim = discord.ui.TextInput(label="İsim")
+    aciklama = discord.ui.TextInput(label="Açıklama", style=discord.TextStyle.paragraph)
+    deneyim = discord.ui.TextInput(label="Deneyiminiz", placeholder="Ne kadar deneyiminiz var?")
+    neden = discord.ui.TextInput(label="Neden Yetkili Olmak İstiyorsunuz?", placeholder="Açıklama")
 
-# Ticket Kategorisi Seçimi
-class TicketSelect(Select):
-    def __init__(self):
-        options = [
-            discord.SelectOption(label="Ekip Alım", description="Yeni bir ekip alım talebi", emoji="⚔️"),
-            discord.SelectOption(label="Yardım", description="Klan hakkında yardım talebi", emoji="🆘"),
-            discord.SelectOption(label="Diğer", description="Genel talepler", emoji="❓"),
-        ]
-        super().__init__(placeholder="Bir kategori seç...", options=options)
+    async def on_submit(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="👮 Yetkili Alım Başvurusu", color=0x3498db)
+        embed.add_field(name="İsim", value=self.isim.value, inline=False)
+        embed.add_field(name="Açıklama", value=self.aciklama.value, inline=False)
+        embed.add_field(name="Deneyim", value=self.deneyim.value, inline=False)
+        embed.add_field(name="Neden", value=self.neden.value, inline=False)
+        # Başvuruyu Yetkili Alım Kanalına gönder
+        channel = bot.get_channel(EKIP_ALIM_KANAL_ID)
+        if channel:
+            await channel.send(embed=embed)
+        await interaction.response.send_message("Başvurunuz alındı ve yetkili alım kanalına gönderildi.", ephemeral=True)
 
-    async def callback(self, interaction: discord.Interaction):
-        guild = interaction.guild
-        category = guild.get_channel(KATEGORI_ID)
+# ✅ Yardım Modal
+class YardimModal(discord.ui.Modal, title="Yardım İsteği Formu"):
+    sorun = discord.ui.TextInput(label="Sorununuz", style=discord.TextStyle.paragraph)
 
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-            guild.get_role(YETKILI_ROL): discord.PermissionOverwrite(read_messages=True, send_messages=True)
-        }
+    async def on_submit(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="💬 Yardım İsteği", color=0xf1c40f)
+        embed.add_field(name="Sorun", value=self.sorun.value, inline=False)
+        await interaction.response.send_message(embed=embed)
 
-        channel = await guild.create_text_channel(
-            name=f"ticket-{interaction.user.name}",
-            category=category,
-            overwrites=overwrites
-        )
+# Yetkili kontrolü
+def kullanici_yetkili():
+    async def predicate(interaction: discord.Interaction):
+        return any(role.id in YETKILI_ROLLER for role in interaction.user.roles)
+    return app_commands.check(predicate)
 
-        embed = discord.Embed(
-            title="🎫 Sons of Valtheris Klan Destek",
-            description=f"{interaction.user.mention} talebiniz oluşturuldu.\n\nYetkililer en kısa sürede sizinle ilgilenecektir.",
-            color=0x2f3136
-        )
+# Kanal kontrolü (istek ve partner komutları için)
+def kanal_check(kanal_id):
+    async def predicate(interaction: discord.Interaction):
+        return interaction.channel.id == kanal_id
+    return app_commands.check(predicate)
 
-        await channel.send(f"<@&{YETKILI_ROL}>", embed=embed)
-
-        await interaction.response.send_message(
-            f"Ticket oluşturuldu: {channel.mention}",
-            ephemeral=True
-        )
-
-class TicketView(View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.add_item(TicketSelect())
-
-# Bot komutları
 @bot.event
 async def on_ready():
     print(f"Bot hazır: {bot.user}")
+    await bot.tree.sync()  # Komutları senkronize et
+    print("Komutlar senkronize edildi.")
 
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def panel(ctx):
-    embed = discord.Embed(
-        title="Sons of Valtheris Klan Ticket Sistemi",
-        description="📌 **Destek Merkezi**\n\nAşağıdaki seçeneklerden birini seçerek ticket oluşturabilirsiniz.\n\n⚠ Gereksiz ticket açmayın.",
-        color=0x2f3136
-    )
+# ✅ Slash Komutlar
+@bot.tree.command(name="ekipalimi")
+async def ekipalimi(interaction: discord.Interaction):
+    await interaction.response.send_modal(EkipAlimModal())
 
-    embed.set_footer(text="Sons of Valtheris Klanı Destek Sistemi")
+@bot.tree.command(name="yetkilialimi")
+async def yetkilialimi(interaction: discord.Interaction):
+    await interaction.response.send_modal(YetkiliAlimModal())
 
-    await ctx.send(embed=embed, view=TicketView())
+@bot.tree.command(name="yardim")
+@kanal_check(ISTEK_KANAL_ID)
+async def yardim(interaction: discord.Interaction):
+    await interaction.response.send_modal(YardimModal())
 
-# Partner başvuru komutu
-@bot.tree.command(name="partnerbasvurusu")
-async def partnerbasvurusu(interaction: discord.Interaction):
-    await interaction.response.send_modal(PartnerBasvuruModal())
-
+# Diğer eski komutları kaldırdım
 bot.run(TOKEN)
